@@ -229,6 +229,45 @@ function getHttpUrlError(value: string): 'invalid_http_url' | undefined {
   return 'invalid_http_url';
 }
 
+function normalizeIntegerStringForComparison(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (!/^-?\d+$/.test(trimmed)) return trimmed;
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? String(parsed) : trimmed;
+}
+
+function normalizeApiKeysTextForComparison(value: string): string {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function normalizeVisualValuesForComparison(values: VisualConfigValues): VisualConfigValues {
+  return {
+    ...values,
+    port: normalizeIntegerStringForComparison(values.port),
+    apiKeysText: normalizeApiKeysTextForComparison(values.apiKeysText),
+    logsMaxTotalSizeMb: normalizeIntegerStringForComparison(values.logsMaxTotalSizeMb),
+    requestRetry: normalizeIntegerStringForComparison(values.requestRetry),
+    maxRetryInterval: normalizeIntegerStringForComparison(values.maxRetryInterval),
+    projectKeepAliveIntervalSeconds: normalizeIntegerStringForComparison(
+      values.projectKeepAliveIntervalSeconds
+    ),
+    streaming: {
+      ...values.streaming,
+      keepaliveSeconds: normalizeIntegerStringForComparison(values.streaming.keepaliveSeconds),
+      bootstrapRetries: normalizeIntegerStringForComparison(values.streaming.bootstrapRetries),
+      nonstreamKeepaliveInterval: normalizeIntegerStringForComparison(
+        values.streaming.nonstreamKeepaliveInterval
+      ),
+    },
+  };
+}
+
 export function getVisualConfigValidationErrors(
   values: VisualConfigValues
 ): VisualConfigValidationErrors {
@@ -473,7 +512,10 @@ export function useVisualConfig() {
   );
 
   const visualDirty = useMemo(() => {
-    return JSON.stringify(visualValues) !== JSON.stringify(baselineValues);
+    return (
+      JSON.stringify(normalizeVisualValuesForComparison(visualValues)) !==
+      JSON.stringify(normalizeVisualValuesForComparison(baselineValues))
+    );
   }, [baselineValues, visualValues]);
 
   const loadVisualValuesFromYaml = useCallback((yamlContent: string) => {

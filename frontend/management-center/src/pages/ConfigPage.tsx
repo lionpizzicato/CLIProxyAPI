@@ -191,25 +191,10 @@ export function ConfigPage() {
       }
 
       if (diffOriginal === nextMergedYaml) {
-        if (activeTab !== 'source' && visualDirty) {
-          const { commercialModeChanged, latestContent } = await persistConfigYaml(
-            nextMergedYaml,
-            latestServerYaml
-          );
-
-          if (latestContent === latestServerYaml) {
-            showNotification(t('config_management.visual_mode_save_noop'), 'error');
-            return;
-          }
-
-          applySavedConfig(latestContent, commercialModeChanged);
-          return;
-        }
-
         setDirty(false);
         setContent(latestServerYaml);
         setServerYaml(latestServerYaml);
-        setMergedYaml(nextMergedYaml);
+        setMergedYaml(latestServerYaml);
         loadVisualValuesFromYaml(latestServerYaml);
         showNotification(t('config_management.diff.no_changes'), 'info');
         return;
