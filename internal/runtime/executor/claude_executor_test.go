@@ -11,10 +11,10 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
-	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
-	sdktranslator "github.com/router-for-me/CLIProxyAPI/v6/sdk/translator"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/config"
+	cliproxyauth "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/cliproxy/auth"
+	cliproxyexecutor "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/cliproxy/executor"
+	sdktranslator "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/translator"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )

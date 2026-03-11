@@ -13,10 +13,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	. "github.com/router-for-me/CLIProxyAPI/v6/internal/constant"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/interfaces"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/api/handlers"
+	. "github.com/lionpizzicato/CLIProxyAPI/v6/internal/constant"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/interfaces"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/registry"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/sdk/api/handlers"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )

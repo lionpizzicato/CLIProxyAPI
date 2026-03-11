@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/auth/antigravity"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/browser"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/misc"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
-	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/auth/antigravity"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/browser"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/config"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/misc"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/util"
+	coreauth "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
 )
 

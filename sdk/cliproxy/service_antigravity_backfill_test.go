@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
-	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/config"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/registry"
+	coreauth "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/cliproxy/auth"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/sdk/config"
 )
 
 func TestBackfillAntigravityModels_RegistersMissingAuth(t *testing.T) {

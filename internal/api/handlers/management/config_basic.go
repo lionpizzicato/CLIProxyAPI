@@ -12,15 +12,15 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
-	sdkconfig "github.com/router-for-me/CLIProxyAPI/v6/sdk/config"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/config"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/util"
+	sdkconfig "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/config"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	latestReleaseURL       = "https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest"
+	latestReleaseURL       = "https://api.github.com/repos/lionpizzicato/CLIProxyAPI/releases/latest"
 	latestReleaseUserAgent = "CLIProxyAPI"
 )
 

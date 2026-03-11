@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
-	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/config"
+	coreauth "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/cliproxy/auth"
 )
 
 var ErrRefreshNotSupported = errors.New("cliproxy auth: refresh not supported")

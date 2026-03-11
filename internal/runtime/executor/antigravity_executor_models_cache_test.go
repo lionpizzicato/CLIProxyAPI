@@ -3,7 +3,7 @@ package executor
 import (
 	"testing"
 
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
+	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/registry"
 )
 
 func resetAntigravityPrimaryModelsCacheForTest() {
