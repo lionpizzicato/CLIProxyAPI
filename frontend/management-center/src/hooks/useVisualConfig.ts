@@ -148,7 +148,7 @@ function docHas(doc: YamlDocument, path: YamlPath): boolean {
 function ensureMapInDoc(doc: YamlDocument, path: YamlPath): void {
   const existing = doc.getIn(path, true);
   if (isMap(existing)) return;
-  doc.setIn(path, {});
+  doc.setIn(path, doc.createNode({}));
 }
 
 function deleteIfMapEmpty(doc: YamlDocument, path: YamlPath): void {
