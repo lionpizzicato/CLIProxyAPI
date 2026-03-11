@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -253,6 +254,67 @@ func (h *Handler) GetWebsocketAuth(c *gin.Context) {
 }
 func (h *Handler) PutWebsocketAuth(c *gin.Context) {
 	h.updateBoolField(c, func(v bool) { h.cfg.WebsocketAuth = v })
+}
+
+// Project keep-alive enabled
+func (h *Handler) GetProjectKeepAliveEnabled(c *gin.Context) {
+	c.JSON(200, gin.H{"enabled": h.cfg.ProjectKeepAlive.Enabled})
+}
+func (h *Handler) PutProjectKeepAliveEnabled(c *gin.Context) {
+	h.updateBoolField(c, func(v bool) { h.cfg.ProjectKeepAlive.Enabled = v })
+}
+
+// Project keep-alive URL
+func (h *Handler) GetProjectKeepAliveURL(c *gin.Context) {
+	c.JSON(200, gin.H{"url": h.cfg.ProjectKeepAlive.URL})
+}
+func (h *Handler) PutProjectKeepAliveURL(c *gin.Context) {
+	var body struct {
+		Value *string `json:"value"`
+	}
+	if errBindJSON := c.ShouldBindJSON(&body); errBindJSON != nil || body.Value == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+
+	value := strings.TrimSpace(*body.Value)
+	if value != "" {
+		parsed, errParse := neturl.ParseRequestURI(value)
+		scheme := ""
+		host := ""
+		if parsed != nil {
+			scheme = strings.ToLower(parsed.Scheme)
+			host = parsed.Host
+		}
+		if errParse != nil || (scheme != "http" && scheme != "https") || host == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url"})
+			return
+		}
+	}
+
+	h.cfg.ProjectKeepAlive.URL = value
+	h.persist(c)
+}
+
+// Project keep-alive interval
+func (h *Handler) GetProjectKeepAliveIntervalSeconds(c *gin.Context) {
+	c.JSON(200, gin.H{"interval-seconds": h.cfg.ProjectKeepAlive.IntervalSeconds})
+}
+func (h *Handler) PutProjectKeepAliveIntervalSeconds(c *gin.Context) {
+	var body struct {
+		Value *int `json:"value"`
+	}
+	if errBindJSON := c.ShouldBindJSON(&body); errBindJSON != nil || body.Value == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+
+	value := *body.Value
+	if value < 0 {
+		value = 0
+	}
+	h.cfg.ProjectKeepAlive.IntervalSeconds = value
+	h.persist(c)
 }
 
 // Request retry

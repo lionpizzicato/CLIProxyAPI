@@ -84,6 +84,9 @@ type Config struct {
 	// WebsocketAuth enables or disables authentication for the WebSocket API.
 	WebsocketAuth bool `yaml:"ws-auth" json:"ws-auth"`
 
+	// ProjectKeepAlive periodically requests a user-configured URL to keep a project active.
+	ProjectKeepAlive ProjectKeepAlive `yaml:"project-keepalive" json:"project-keepalive"`
+
 	// GeminiKey defines Gemini API key configurations with optional routing overrides.
 	GeminiKey []GeminiKey `yaml:"gemini-api-key" json:"gemini-api-key"`
 
@@ -179,6 +182,18 @@ type RoutingConfig struct {
 	// Strategy selects the credential selection strategy.
 	// Supported values: "round-robin" (default), "fill-first".
 	Strategy string `yaml:"strategy,omitempty" json:"strategy,omitempty"`
+}
+
+// ProjectKeepAlive configures a lightweight background keep-alive request.
+type ProjectKeepAlive struct {
+	// Enabled toggles the background keep-alive worker.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// URL is the target endpoint requested on each interval.
+	URL string `yaml:"url" json:"url"`
+
+	// IntervalSeconds is the request interval in seconds. Values <= 0 disable scheduling.
+	IntervalSeconds int `yaml:"interval-seconds" json:"interval-seconds"`
 }
 
 // OAuthModelAlias defines a model ID alias for a specific channel.
@@ -605,6 +620,12 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	if cfg.MaxRetryCredentials < 0 {
 		cfg.MaxRetryCredentials = 0
 	}
+
+	if cfg.ProjectKeepAlive.IntervalSeconds < 0 {
+		cfg.ProjectKeepAlive.IntervalSeconds = 0
+	}
+
+	cfg.ProjectKeepAlive.URL = strings.TrimSpace(cfg.ProjectKeepAlive.URL)
 
 	// Sanitize Gemini API key configuration and migrate legacy entries.
 	cfg.SanitizeGeminiKeys()

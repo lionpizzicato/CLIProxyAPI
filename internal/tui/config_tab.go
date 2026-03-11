@@ -356,6 +356,17 @@ func (m configTabModel) parseConfig(cfg map[string]any) []configField {
 	// WebSocket auth
 	fields = append(fields, configField{"WebSocket Auth", "ws-auth", "bool", fmt.Sprintf("%v", getBool(cfg, "ws-auth")), nil})
 
+	// Project keep-alive
+	if keepAlive, ok := cfg["project-keepalive"].(map[string]any); ok {
+		fields = append(fields, configField{"Project KeepAlive Enabled", "project-keepalive/enabled", "bool", fmt.Sprintf("%v", getBool(keepAlive, "enabled")), nil})
+		fields = append(fields, configField{"Project KeepAlive URL", "project-keepalive/url", "string", getString(keepAlive, "url"), nil})
+		fields = append(fields, configField{"Project KeepAlive Interval (s)", "project-keepalive/interval-seconds", "int", fmt.Sprintf("%.0f", getFloat(keepAlive, "interval-seconds")), nil})
+	} else {
+		fields = append(fields, configField{"Project KeepAlive Enabled", "project-keepalive/enabled", "bool", "false", nil})
+		fields = append(fields, configField{"Project KeepAlive URL", "project-keepalive/url", "string", "", nil})
+		fields = append(fields, configField{"Project KeepAlive Interval (s)", "project-keepalive/interval-seconds", "int", "0", nil})
+	}
+
 	// AMP settings
 	if amp, ok := cfg["ampcode"].(map[string]any); ok {
 		upstreamURL := getString(amp, "upstream-url")
@@ -371,6 +382,9 @@ func (m configTabModel) parseConfig(cfg map[string]any) []configField {
 func fieldSection(apiPath string) string {
 	if strings.HasPrefix(apiPath, "ampcode/") {
 		return T("section_ampcode")
+	}
+	if strings.HasPrefix(apiPath, "project-keepalive/") {
+		return "Project KeepAlive"
 	}
 	if strings.HasPrefix(apiPath, "quota-exceeded/") {
 		return T("section_quota")

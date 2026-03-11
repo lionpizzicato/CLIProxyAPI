@@ -65,6 +65,12 @@ usage-statistics-enabled: false
 # Proxy URL. Supports socks5/http/https protocols. Example: socks5://user:pass@192.168.1.1:1080/
 proxy-url: ""
 
+# Project keep-alive. Periodically requests the configured URL to keep an external project/session active.
+project-keepalive:
+  enabled: false
+  url: ""
+  interval-seconds: 300
+
 # When true, unprefixed model requests only use credentials without a prefix (except when prefix == model name).
 force-model-prefix: false
 

@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: cliproxyapi
+    runtime: go
+    plan: free
+    region: singapore
+    healthCheckPath: /
+    buildCommand: go build -ldflags="-s -w" -o ./bin/CLIProxyAPI ./cmd/server
+    startCommand: |
+      set -eu
+      : "${ACCESS_API_KEY:?ACCESS_API_KEY is required}"
+      cat > config.render.yaml <<EOF
+      host: "0.0.0.0"
+      port: ${PORT:-10000}
+      auth-dir: "./auths"
+      api-keys:
+        - "${ACCESS_API_KEY}"
+      EOF
+      exec ./bin/CLIProxyAPI -config ./config.render.yaml
+
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: ACCESS_API_KEY
+        sync: false
+      - key: MANAGEMENT_PASSWORD
+        sync: false
+      - key: DEPLOY
+        value: cloud
+      - key: TZ
+        value: Asia/Shanghai

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/api"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/projectkeepalive"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/runtime/executor"
 	_ "github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
@@ -89,6 +90,9 @@ type Service struct {
 
 	// wsGateway manages websocket Gemini providers.
 	wsGateway *wsrelay.Manager
+
+	// projectKeepAlive manages optional background keep-alive requests.
+	projectKeepAlive *projectkeepalive.Manager
 }
 
 // RegisterUsagePlugin registers a usage plugin on the global usage manager.
@@ -561,6 +565,9 @@ func (s *Service) Run(ctx context.Context) error {
 		s.hooks.OnAfterStart(s)
 	}
 
+	s.projectKeepAlive = projectkeepalive.NewManager()
+	s.projectKeepAlive.Start(ctx, s.cfg)
+
 	var watcherWrapper *WatcherWrapper
 	reloadCallback := func(newCfg *config.Config) {
 		previousStrategy := ""
@@ -612,6 +619,9 @@ func (s *Service) Run(ctx context.Context) error {
 		if s.coreManager != nil {
 			s.coreManager.SetConfig(newCfg)
 			s.coreManager.SetOAuthModelAlias(newCfg.OAuthModelAlias)
+		}
+		if s.projectKeepAlive != nil {
+			s.projectKeepAlive.Update(newCfg)
 		}
 		s.rebindExecutors()
 	}
@@ -694,6 +704,9 @@ func (s *Service) Shutdown(ctx context.Context) error {
 		if s.authQueueStop != nil {
 			s.authQueueStop()
 			s.authQueueStop = nil
+		}
+		if s.projectKeepAlive != nil {
+			s.projectKeepAlive.Stop()
 		}
 
 		if errShutdownPprof := s.shutdownPprof(ctx); errShutdownPprof != nil {
