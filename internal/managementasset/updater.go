@@ -1,131 +1,39 @@
 package managementasset
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
+	_ "embed"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/config"
 	"github.com/lionpizzicato/CLIProxyAPI/v6/internal/util"
-	sdkconfig "github.com/lionpizzicato/CLIProxyAPI/v6/sdk/config"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/singleflight"
 )
 
-const (
-	defaultManagementReleaseURL  = "https://github.com/lionpizzicato/Cli-Proxy-API-Management-Center/releases/latest"
-	defaultManagementFallbackURL = "https://github.com/lionpizzicato/Cli-Proxy-API-Management-Center/releases/latest"
-	managementAssetName          = "management.html"
-	httpUserAgent                = "CLIProxyAPI-management-updater"
-	managementSyncMinInterval    = 30 * time.Second
-	updateCheckInterval          = 3 * time.Hour
-)
+const managementAssetName = "management.html"
 
 // ManagementFileName exposes the control panel asset filename.
 const ManagementFileName = managementAssetName
 
-var (
-	lastUpdateCheckMu   sync.Mutex
-	lastUpdateCheckTime time.Time
-	currentConfigPtr    atomic.Pointer[config.Config]
-	schedulerOnce       sync.Once
-	schedulerConfigPath atomic.Value
-	sfGroup             singleflight.Group
-)
+//go:embed management.html
+var embeddedManagementHTML []byte
 
-// SetCurrentConfig stores the latest configuration snapshot for management asset decisions.
-func SetCurrentConfig(cfg *config.Config) {
-	if cfg == nil {
-		currentConfigPtr.Store(nil)
-		return
-	}
-	currentConfigPtr.Store(cfg)
-}
+// SetCurrentConfig preserves the historical package API. The management UI is now bundled
+// with the binary, so no runtime config tracking is required here.
+func SetCurrentConfig(_ *config.Config) {}
 
-// StartAutoUpdater launches a background goroutine that periodically ensures the management asset is up to date.
-// It respects the disable-control-panel flag on every iteration and supports hot-reloaded configurations.
-func StartAutoUpdater(ctx context.Context, configFilePath string) {
-	configFilePath = strings.TrimSpace(configFilePath)
-	if configFilePath == "" {
-		log.Debug("management asset auto-updater skipped: empty config path")
-		return
-	}
-
-	schedulerConfigPath.Store(configFilePath)
-
-	schedulerOnce.Do(func() {
-		go runAutoUpdater(ctx)
-	})
-}
-
-func runAutoUpdater(ctx context.Context) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	ticker := time.NewTicker(updateCheckInterval)
-	defer ticker.Stop()
-
-	runOnce := func() {
-		cfg := currentConfigPtr.Load()
-		if cfg == nil {
-			log.Debug("management asset auto-updater skipped: config not yet available")
-			return
-		}
-		if cfg.RemoteManagement.DisableControlPanel {
-			log.Debug("management asset auto-updater skipped: control panel disabled")
-			return
-		}
-
-		configPath, _ := schedulerConfigPath.Load().(string)
-		staticDir := StaticDir(configPath)
-		EnsureLatestManagementHTML(ctx, staticDir, cfg.ProxyURL, cfg.RemoteManagement.PanelGitHubRepository)
-	}
-
-	runOnce()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			runOnce()
-		}
-	}
-}
-
-func newHTTPClient(proxyURL string) *http.Client {
-	client := &http.Client{Timeout: 15 * time.Second}
-
-	sdkCfg := &sdkconfig.SDKConfig{ProxyURL: strings.TrimSpace(proxyURL)}
-	util.SetProxy(sdkCfg, client)
-
-	return client
-}
-
-type releaseAsset struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
-	Digest             string `json:"digest"`
-}
-
-type releaseResponse struct {
-	Assets []releaseAsset `json:"assets"`
+// StartAutoUpdater preserves the historical package API. The management UI is now bundled
+// with the binary, so no runtime download or sync loop is required.
+func StartAutoUpdater(_ context.Context, _ string) {
+	log.Debug("management asset auto-updater skipped: using bundled asset")
 }
 
 // StaticDir resolves the directory that stores the management control panel asset.
+// This remains available for explicit MANAGEMENT_STATIC_PATH overrides.
 func StaticDir(configFilePath string) string {
 	if override := strings.TrimSpace(os.Getenv("MANAGEMENT_STATIC_PATH")); override != "" {
 		cleaned := filepath.Clean(override)
@@ -146,10 +54,8 @@ func StaticDir(configFilePath string) string {
 
 	base := filepath.Dir(configFilePath)
 	fileInfo, err := os.Stat(configFilePath)
-	if err == nil {
-		if fileInfo.IsDir() {
-			base = configFilePath
-		}
+	if err == nil && fileInfo.IsDir() {
+		base = configFilePath
 	}
 
 	return filepath.Join(base, "static")
@@ -172,250 +78,66 @@ func FilePath(configFilePath string) string {
 	return filepath.Join(dir, ManagementFileName)
 }
 
-// EnsureLatestManagementHTML checks the latest management.html asset and updates the local copy when needed.
-// It coalesces concurrent sync attempts and returns whether the asset exists after the sync attempt.
-func EnsureLatestManagementHTML(ctx context.Context, staticDir string, proxyURL string, panelRepository string) bool {
-	if ctx == nil {
-		ctx = context.Background()
+// LoadManagementHTML returns the bundled management page. When MANAGEMENT_STATIC_PATH is set,
+// an on-disk override is preferred.
+func LoadManagementHTML(configFilePath string) ([]byte, error) {
+	if override := strings.TrimSpace(os.Getenv("MANAGEMENT_STATIC_PATH")); override != "" {
+		data, err := os.ReadFile(FilePath(configFilePath))
+		if err == nil {
+			return data, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
 	}
 
-	staticDir = strings.TrimSpace(staticDir)
-	if staticDir == "" {
-		log.Debug("management asset sync skipped: empty static directory")
-		return false
+	if len(embeddedManagementHTML) == 0 {
+		return nil, os.ErrNotExist
 	}
-	localPath := filepath.Join(staticDir, managementAssetName)
 
-	_, _, _ = sfGroup.Do(localPath, func() (interface{}, error) {
-		lastUpdateCheckMu.Lock()
-		now := time.Now()
-		timeSinceLastAttempt := now.Sub(lastUpdateCheckTime)
-		if !lastUpdateCheckTime.IsZero() && timeSinceLastAttempt < managementSyncMinInterval {
-			lastUpdateCheckMu.Unlock()
-			log.Debugf(
-				"management asset sync skipped by throttle: last attempt %v ago (interval %v)",
-				timeSinceLastAttempt.Round(time.Second),
-				managementSyncMinInterval,
-			)
-			return nil, nil
-		}
-		lastUpdateCheckTime = now
-		lastUpdateCheckMu.Unlock()
-
-		localFileMissing := false
-		if _, errStat := os.Stat(localPath); errStat != nil {
-			if errors.Is(errStat, os.ErrNotExist) {
-				localFileMissing = true
-			} else {
-				log.WithError(errStat).Debug("failed to stat local management asset")
-			}
-		}
-
-		if errMkdirAll := os.MkdirAll(staticDir, 0o755); errMkdirAll != nil {
-			log.WithError(errMkdirAll).Warn("failed to prepare static directory for management asset")
-			return nil, nil
-		}
-
-		releaseURL := resolveReleaseURL(panelRepository)
-		client := newHTTPClient(proxyURL)
-
-		localHash, err := fileSHA256(localPath)
-		if err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				log.WithError(err).Debug("failed to read local management asset hash")
-			}
-			localHash = ""
-		}
-
-		asset, remoteHash, err := fetchLatestAsset(ctx, client, releaseURL)
-		if err != nil {
-			if localFileMissing {
-				log.WithError(err).Warn("failed to fetch latest management release information, trying fallback page")
-				if ensureFallbackManagementHTML(ctx, client, localPath) {
-					return nil, nil
-				}
-				return nil, nil
-			}
-			log.WithError(err).Warn("failed to fetch latest management release information")
-			return nil, nil
-		}
-
-		if remoteHash != "" && localHash != "" && strings.EqualFold(remoteHash, localHash) {
-			log.Debug("management asset is already up to date")
-			return nil, nil
-		}
-
-		data, downloadedHash, err := downloadAsset(ctx, client, asset.BrowserDownloadURL)
-		if err != nil {
-			if localFileMissing {
-				log.WithError(err).Warn("failed to download management asset, trying fallback page")
-				if ensureFallbackManagementHTML(ctx, client, localPath) {
-					return nil, nil
-				}
-				return nil, nil
-			}
-			log.WithError(err).Warn("failed to download management asset")
-			return nil, nil
-		}
-
-		if remoteHash != "" && !strings.EqualFold(remoteHash, downloadedHash) {
-			log.Warnf("remote digest mismatch for management asset: expected %s got %s", remoteHash, downloadedHash)
-		}
-
-		if err = atomicWriteFile(localPath, data); err != nil {
-			log.WithError(err).Warn("failed to update management asset on disk")
-			return nil, nil
-		}
-
-		log.Infof("management asset updated successfully (hash=%s)", downloadedHash)
-		return nil, nil
-	})
-
-	_, err := os.Stat(localPath)
-	return err == nil
+	return embeddedManagementHTML, nil
 }
 
-func ensureFallbackManagementHTML(ctx context.Context, client *http.Client, localPath string) bool {
-	data, downloadedHash, err := downloadAsset(ctx, client, defaultManagementFallbackURL)
-	if err != nil {
-		log.WithError(err).Warn("failed to download fallback management control panel page")
+// EnsureLatestManagementHTML preserves the historical package API. Instead of downloading
+// assets, it materializes the bundled HTML only when an explicit static path is requested.
+func EnsureLatestManagementHTML(_ context.Context, staticDir string, _ string, _ string) bool {
+	if len(embeddedManagementHTML) == 0 {
 		return false
 	}
 
-	if err = atomicWriteFile(localPath, data); err != nil {
-		log.WithError(err).Warn("failed to persist fallback management control panel page")
+	targetPath := ""
+	if override := strings.TrimSpace(os.Getenv("MANAGEMENT_STATIC_PATH")); override != "" {
+		targetPath = FilePath("")
+	} else if trimmed := strings.TrimSpace(staticDir); trimmed != "" {
+		targetPath = filepath.Join(trimmed, managementAssetName)
+	}
+
+	if targetPath == "" {
+		return true
+	}
+
+	if err := writeEmbeddedAsset(targetPath); err != nil {
+		log.WithError(err).Warn("failed to materialize bundled management asset")
 		return false
 	}
 
-	log.Infof("management asset updated from fallback page successfully (hash=%s)", downloadedHash)
 	return true
 }
 
-func resolveReleaseURL(repo string) string {
-	repo = strings.TrimSpace(repo)
-	if repo == "" {
-		return defaultManagementReleaseURL
+func writeEmbeddedAsset(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
 	}
 
-	parsed, err := url.Parse(repo)
-	if err != nil || parsed.Host == "" {
-		return defaultManagementReleaseURL
-	}
-
-	host := strings.ToLower(parsed.Host)
-	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
-
-	if host == "api.github.com" {
-		if !strings.HasSuffix(strings.ToLower(parsed.Path), "/releases/latest") {
-			parsed.Path = parsed.Path + "/releases/latest"
+	if existing, err := os.ReadFile(path); err == nil {
+		if bytes.Equal(existing, embeddedManagementHTML) {
+			return nil
 		}
-		return parsed.String()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
-	if host == "github.com" {
-		parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-		if len(parts) >= 2 && parts[0] != "" && parts[1] != "" {
-			repoName := strings.TrimSuffix(parts[1], ".git")
-			return fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", parts[0], repoName)
-		}
-	}
-
-	return defaultManagementReleaseURL
-}
-
-func fetchLatestAsset(ctx context.Context, client *http.Client, releaseURL string) (*releaseAsset, string, error) {
-	if strings.TrimSpace(releaseURL) == "" {
-		releaseURL = defaultManagementReleaseURL
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releaseURL, nil)
-	if err != nil {
-		return nil, "", fmt.Errorf("create release request: %w", err)
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", httpUserAgent)
-	gitURL := strings.ToLower(strings.TrimSpace(os.Getenv("GITSTORE_GIT_URL")))
-	if tok := strings.TrimSpace(os.Getenv("GITSTORE_GIT_TOKEN")); tok != "" && strings.Contains(gitURL, "github.com") {
-		req.Header.Set("Authorization", "Bearer "+tok)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, "", fmt.Errorf("execute release request: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, "", fmt.Errorf("unexpected release status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var release releaseResponse
-	if err = json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, "", fmt.Errorf("decode release response: %w", err)
-	}
-
-	for i := range release.Assets {
-		asset := &release.Assets[i]
-		if strings.EqualFold(asset.Name, managementAssetName) {
-			remoteHash := parseDigest(asset.Digest)
-			return asset, remoteHash, nil
-		}
-	}
-
-	return nil, "", fmt.Errorf("management asset %s not found in latest release", managementAssetName)
-}
-
-func downloadAsset(ctx context.Context, client *http.Client, downloadURL string) ([]byte, string, error) {
-	if strings.TrimSpace(downloadURL) == "" {
-		return nil, "", fmt.Errorf("empty download url")
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-	if err != nil {
-		return nil, "", fmt.Errorf("create download request: %w", err)
-	}
-	req.Header.Set("User-Agent", httpUserAgent)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, "", fmt.Errorf("execute download request: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, "", fmt.Errorf("unexpected download status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("read download body: %w", err)
-	}
-
-	sum := sha256.Sum256(data)
-	return data, hex.EncodeToString(sum[:]), nil
-}
-
-func fileSHA256(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	h := sha256.New()
-	if _, err = io.Copy(h, file); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return atomicWriteFile(path, embeddedManagementHTML)
 }
 
 func atomicWriteFile(path string, data []byte) error {
@@ -447,17 +169,4 @@ func atomicWriteFile(path string, data []byte) error {
 	}
 
 	return nil
-}
-
-func parseDigest(digest string) string {
-	digest = strings.TrimSpace(digest)
-	if digest == "" {
-		return ""
-	}
-
-	if idx := strings.Index(digest, ":"); idx >= 0 {
-		digest = digest[idx+1:]
-	}
-
-	return strings.ToLower(strings.TrimSpace(digest))
 }

@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	DefaultPanelGitHubRepository = "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+	DefaultPanelGitHubRepository = "https://github.com/lionpizzicato/Cli-Proxy-API-Management-Center"
 	DefaultPprofAddr             = "127.0.0.1:8316"
 )
 
@@ -160,10 +160,10 @@ type RemoteManagement struct {
 	AllowRemote bool `yaml:"allow-remote"`
 	// SecretKey is the management key (plaintext or bcrypt hashed). YAML key intentionally 'secret-key'.
 	SecretKey string `yaml:"secret-key"`
-	// DisableControlPanel skips serving and syncing the bundled management UI when true.
+	// DisableControlPanel skips serving the bundled management UI when true.
 	DisableControlPanel bool `yaml:"disable-control-panel"`
-	// PanelGitHubRepository overrides the GitHub repository used to fetch the management panel asset.
-	// Accepts either a repository URL (https://github.com/org/repo) or an API releases endpoint.
+	// PanelGitHubRepository is kept for configuration compatibility with older releases.
+	// The bundled management UI is now shipped with CLIProxyAPI and no longer downloads from GitHub.
 	PanelGitHubRepository string `yaml:"panel-github-repository"`
 }
 

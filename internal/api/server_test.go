@@ -46,6 +46,24 @@ func newTestServer(t *testing.T) *Server {
 	return NewServer(cfg, authManager, accessManager, configPath)
 }
 
+func TestManagementControlPanelServesBundledHTML(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/management.html", nil)
+	rr := httptest.NewRecorder()
+	server.engine.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("unexpected content type: %s", contentType)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "<title>CLI Proxy API Management Center</title>") {
+		t.Fatalf("bundled management page was not served: %s", body[:min(len(body), 200)])
+	}
+}
+
 func TestAmpProviderModelRoutes(t *testing.T) {
 	testCases := []struct {
 		name         string
