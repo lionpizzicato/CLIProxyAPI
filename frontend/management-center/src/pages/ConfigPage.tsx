@@ -112,15 +112,8 @@ export function ConfigPage() {
     );
   }, [activeTab, showNotification, t, visualParseError]);
 
-  const handleConfirmSave = async () => {
-    setSaving(true);
-    try {
-      const previousCommercialMode = readCommercialModeFromYaml(serverYaml);
-      const nextCommercialMode = readCommercialModeFromYaml(mergedYaml);
-      const commercialModeChanged = previousCommercialMode !== nextCommercialMode;
-
-      await configFileApi.saveConfigYaml(mergedYaml);
-      const latestContent = await configFileApi.fetchConfigYaml();
+  const applySavedConfig = useCallback(
+    (latestContent: string, commercialModeChanged: boolean) => {
       setDirty(false);
       setDiffModalOpen(false);
       setContent(latestContent);
@@ -131,6 +124,26 @@ export function ConfigPage() {
       if (commercialModeChanged) {
         showNotification(t('notification.commercial_mode_restart_required'), 'warning');
       }
+    },
+    [loadVisualValuesFromYaml, showNotification, t]
+  );
+
+  const persistConfigYaml = useCallback(async (nextYaml: string, previousYaml: string) => {
+    const previousCommercialMode = readCommercialModeFromYaml(previousYaml);
+    const nextCommercialMode = readCommercialModeFromYaml(nextYaml);
+    const commercialModeChanged = previousCommercialMode !== nextCommercialMode;
+
+    await configFileApi.saveConfigYaml(nextYaml);
+    const latestContent = await configFileApi.fetchConfigYaml();
+
+    return { commercialModeChanged, latestContent };
+  }, []);
+
+  const handleConfirmSave = async () => {
+    setSaving(true);
+    try {
+      const { commercialModeChanged, latestContent } = await persistConfigYaml(mergedYaml, serverYaml);
+      applySavedConfig(latestContent, commercialModeChanged);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       showNotification(`${t('notification.save_failed')}: ${message}`, 'error');
@@ -178,6 +191,21 @@ export function ConfigPage() {
       }
 
       if (diffOriginal === nextMergedYaml) {
+        if (activeTab !== 'source' && visualDirty) {
+          const { commercialModeChanged, latestContent } = await persistConfigYaml(
+            nextMergedYaml,
+            latestServerYaml
+          );
+
+          if (latestContent === latestServerYaml) {
+            showNotification(t('config_management.visual_mode_save_noop'), 'error');
+            return;
+          }
+
+          applySavedConfig(latestContent, commercialModeChanged);
+          return;
+        }
+
         setDirty(false);
         setContent(latestServerYaml);
         setServerYaml(latestServerYaml);
