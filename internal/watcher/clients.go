@@ -62,16 +62,7 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 
 	var authFileCount int
 	if rescanAuth {
-		authFileCount = w.loadFileClients(cfg)
-		log.Debugf("loaded %d file-based clients", authFileCount)
-	} else {
-		w.clientsMutex.RLock()
-		authFileCount = len(w.lastAuthHashes)
-		w.clientsMutex.RUnlock()
-		log.Debugf("skipping auth directory rescan; retaining %d existing auth files", authFileCount)
-	}
-
-	if rescanAuth {
+		readableAuthCount := 0
 		w.clientsMutex.Lock()
 
 		w.lastAuthHashes = make(map[string]string)
@@ -85,24 +76,28 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 					return nil
 				}
 				if !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".json") {
+					authFileCount++
 					if data, errReadFile := os.ReadFile(path); errReadFile == nil && len(data) > 0 {
+						readableAuthCount++
 						sum := sha256.Sum256(data)
 						normalizedPath := w.normalizeAuthPath(path)
 						w.lastAuthHashes[normalizedPath] = hex.EncodeToString(sum[:])
-						// Parse and cache auth content for future diff comparisons
-						var auth coreauth.Auth
-						if errParse := json.Unmarshal(data, &auth); errParse == nil {
-							w.lastAuthContents[normalizedPath] = &auth
-						}
-						ctx := &synthesizer.SynthesisContext{
-							Config:      cfg,
-							AuthDir:     resolvedAuthDir,
-							Now:         time.Now(),
-							IDGenerator: synthesizer.NewStableIDGenerator(),
-						}
-						if generated := synthesizer.SynthesizeAuthFile(ctx, path, data); len(generated) > 0 {
-							if pathAuths := authSliceToMap(generated); len(pathAuths) > 0 {
-								w.fileAuthsByPath[normalizedPath] = pathAuths
+						// Parse metadata once for diff cache + synthesis.
+						var metadata map[string]any
+						if errParse := json.Unmarshal(data, &metadata); errParse == nil {
+							if diffAuth := authDiffStubFromMetadata(metadata); diffAuth != nil {
+								w.lastAuthContents[normalizedPath] = diffAuth
+							}
+							ctx := &synthesizer.SynthesisContext{
+								Config:      cfg,
+								AuthDir:     resolvedAuthDir,
+								Now:         time.Now(),
+								IDGenerator: synthesizer.NewStableIDGenerator(),
+							}
+							if generated := synthesizer.SynthesizeAuthFileWithMetadata(ctx, path, metadata); len(generated) > 0 {
+								if pathAuths := authSliceToMap(generated); len(pathAuths) > 0 {
+									w.fileAuthsByPath[normalizedPath] = pathAuths
+								}
 							}
 						}
 					}
@@ -111,6 +106,13 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 			})
 		}
 		w.clientsMutex.Unlock()
+		log.Debugf("auth directory scan complete - found %d .json files, %d readable", authFileCount, readableAuthCount)
+		log.Debugf("loaded %d file-based clients", authFileCount)
+	} else {
+		w.clientsMutex.RLock()
+		authFileCount = len(w.lastAuthHashes)
+		w.clientsMutex.RUnlock()
+		log.Debugf("skipping auth directory rescan; retaining %d existing auth files", authFileCount)
 	}
 
 	totalNewClients := authFileCount + geminiAPIKeyCount + vertexCompatAPIKeyCount + claudeAPIKeyCount + codexAPIKeyCount + openAICompatCount
@@ -148,12 +150,13 @@ func (w *Watcher) addOrUpdateClient(path string) {
 	curHash := hex.EncodeToString(sum[:])
 	normalized := w.normalizeAuthPath(path)
 
-	// Parse new auth content for diff comparison
-	var newAuth coreauth.Auth
-	if errParse := json.Unmarshal(data, &newAuth); errParse != nil {
+	// Parse new auth metadata for diff comparison + synthesis
+	var metadata map[string]any
+	if errParse := json.Unmarshal(data, &metadata); errParse != nil {
 		log.Errorf("failed to parse auth file %s: %v", filepath.Base(path), errParse)
 		return
 	}
+	diffAuth := authDiffStubFromMetadata(metadata)
 
 	w.clientsMutex.Lock()
 	if w.config == nil {
@@ -177,7 +180,7 @@ func (w *Watcher) addOrUpdateClient(path string) {
 	}
 
 	// Compute and log field changes
-	if changes := diff.BuildAuthChangeDetails(oldAuth, &newAuth); len(changes) > 0 {
+	if changes := diff.BuildAuthChangeDetails(oldAuth, diffAuth); len(changes) > 0 {
 		log.Debugf("auth field changes for %s:", filepath.Base(path))
 		for _, c := range changes {
 			log.Debugf("  %s", c)
@@ -189,7 +192,11 @@ func (w *Watcher) addOrUpdateClient(path string) {
 	if w.lastAuthContents == nil {
 		w.lastAuthContents = make(map[string]*coreauth.Auth)
 	}
-	w.lastAuthContents[normalized] = &newAuth
+	if diffAuth != nil {
+		w.lastAuthContents[normalized] = diffAuth
+	} else {
+		delete(w.lastAuthContents, normalized)
+	}
 
 	oldByID := make(map[string]*coreauth.Auth, len(w.fileAuthsByPath[normalized]))
 	for id, a := range w.fileAuthsByPath[normalized] {
@@ -203,7 +210,7 @@ func (w *Watcher) addOrUpdateClient(path string) {
 		Now:         time.Now(),
 		IDGenerator: synthesizer.NewStableIDGenerator(),
 	}
-	generated := synthesizer.SynthesizeAuthFile(sctx, path, data)
+	generated := synthesizer.SynthesizeAuthFileWithMetadata(sctx, path, metadata)
 	newByID := authSliceToMap(generated)
 	if len(newByID) > 0 {
 		w.fileAuthsByPath[normalized] = newByID
@@ -271,6 +278,23 @@ func authSliceToMap(auths []*coreauth.Auth) map[string]*coreauth.Auth {
 		byID[a.ID] = a
 	}
 	return byID
+}
+
+func authDiffStubFromMetadata(metadata map[string]any) *coreauth.Auth {
+	if metadata == nil {
+		return nil
+	}
+	auth := &coreauth.Auth{}
+	if rawPrefix, ok := metadata["prefix"].(string); ok {
+		auth.Prefix = rawPrefix
+	}
+	if rawProxy, ok := metadata["proxy_url"].(string); ok {
+		auth.ProxyURL = rawProxy
+	}
+	if disabled, ok := metadata["disabled"].(bool); ok {
+		auth.Disabled = disabled
+	}
+	return auth
 }
 
 func (w *Watcher) loadFileClients(cfg *config.Config) int {

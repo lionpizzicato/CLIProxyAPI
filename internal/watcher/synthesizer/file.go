@@ -65,16 +65,29 @@ func SynthesizeAuthFile(ctx *SynthesisContext, fullPath string, data []byte) []*
 	return synthesizeFileAuths(ctx, fullPath, data)
 }
 
+// SynthesizeAuthFileWithMetadata generates Auth entries for one auth JSON file payload
+// using pre-parsed metadata. It matches the behavior of SynthesizeAuthFile.
+func SynthesizeAuthFileWithMetadata(ctx *SynthesisContext, fullPath string, metadata map[string]any) []*coreauth.Auth {
+	return synthesizeFileAuthsWithMetadata(ctx, fullPath, metadata)
+}
+
 func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []*coreauth.Auth {
 	if ctx == nil || len(data) == 0 {
 		return nil
 	}
-	now := ctx.Now
-	cfg := ctx.Config
 	var metadata map[string]any
 	if errUnmarshal := json.Unmarshal(data, &metadata); errUnmarshal != nil {
 		return nil
 	}
+	return synthesizeFileAuthsWithMetadata(ctx, fullPath, metadata)
+}
+
+func synthesizeFileAuthsWithMetadata(ctx *SynthesisContext, fullPath string, metadata map[string]any) []*coreauth.Auth {
+	if ctx == nil || metadata == nil {
+		return nil
+	}
+	now := ctx.Now
+	cfg := ctx.Config
 	t, _ := metadata["type"].(string)
 	if t == "" {
 		return nil
