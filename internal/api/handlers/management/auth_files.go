@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -338,6 +339,137 @@ func (h *Handler) listAuthFilesFromDisk(c *gin.Context) {
 		}
 	}
 	c.JSON(200, gin.H{"files": files})
+}
+
+type authFileTreeNode struct {
+	Name     string             `json:"name"`
+	Path     string             `json:"path"`
+	Type     string             `json:"type"`
+	Size     int64              `json:"size,omitempty"`
+	ModTime  time.Time          `json:"modtime,omitempty"`
+	Children []*authFileTreeNode `json:"children,omitempty"`
+}
+
+func (h *Handler) GetAuthFileTree(c *gin.Context) {
+	if h == nil || h.cfg == nil {
+		c.JSON(500, gin.H{"error": "handler not initialized"})
+		return
+	}
+
+	authDir := strings.TrimSpace(h.cfg.AuthDir)
+	if authDir == "" {
+		c.JSON(200, gin.H{"root": "", "tree": nil})
+		return
+	}
+
+	resolved := authDir
+	if resolvedDir, errResolve := util.ResolveAuthDir(authDir); errResolve == nil && resolvedDir != "" {
+		resolved = resolvedDir
+	}
+
+	tree, errTree := buildAuthFileTree(resolved)
+	if errTree != nil {
+		c.JSON(500, gin.H{"error": fmt.Sprintf("failed to build auth tree: %v", errTree)})
+		return
+	}
+
+	c.JSON(200, gin.H{"root": resolved, "tree": tree})
+}
+
+func buildAuthFileTree(root string) (*authFileTreeNode, error) {
+	if root == "" {
+		return &authFileTreeNode{Name: "", Path: "", Type: "dir"}, nil
+	}
+
+	rootName := filepath.Base(root)
+	if rootName == "" {
+		rootName = root
+	}
+	rootNode := &authFileTreeNode{Name: rootName, Path: "", Type: "dir"}
+	nodes := map[string]*authFileTreeNode{"": rootNode}
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		rel, errRel := filepath.Rel(root, path)
+		if errRel != nil {
+			return nil
+		}
+		if rel == "." {
+			if info, errInfo := d.Info(); errInfo == nil {
+				rootNode.ModTime = info.ModTime()
+			}
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		parts := strings.Split(rel, "/")
+		current := ""
+		for i, part := range parts {
+			if part == "" {
+				continue
+			}
+			if current == "" {
+				current = part
+			} else {
+				current = current + "/" + part
+			}
+			if _, exists := nodes[current]; exists {
+				continue
+			}
+			isDir := i < len(parts)-1 || d.IsDir()
+			nodeType := "file"
+			if isDir {
+				nodeType = "dir"
+			}
+			node := &authFileTreeNode{
+				Name: part,
+				Path: current,
+				Type: nodeType,
+			}
+			if !isDir {
+				if info, errInfo := d.Info(); errInfo == nil {
+					node.Size = info.Size()
+					node.ModTime = info.ModTime()
+				}
+			}
+			nodes[current] = node
+			parentPath := ""
+			if i > 0 {
+				parentPath = strings.Join(parts[:i], "/")
+			}
+			if parent, ok := nodes[parentPath]; ok {
+				parent.Children = append(parent.Children, node)
+			}
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+
+	sortAuthFileTree(rootNode)
+	return rootNode, nil
+}
+
+func sortAuthFileTree(node *authFileTreeNode) {
+	if node == nil || len(node.Children) == 0 {
+		return
+	}
+	sort.Slice(node.Children, func(i, j int) bool {
+		left := node.Children[i]
+		right := node.Children[j]
+		if left == nil || right == nil {
+			return left != nil
+		}
+		if left.Type != right.Type {
+			return left.Type == "dir"
+		}
+		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+	})
+	for _, child := range node.Children {
+		sortAuthFileTree(child)
+	}
 }
 
 func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth) gin.H {

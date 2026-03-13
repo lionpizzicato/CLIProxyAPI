@@ -3,6 +3,7 @@ package synthesizer
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,30 +32,31 @@ func (s *FileSynthesizer) Synthesize(ctx *SynthesisContext) ([]*coreauth.Auth, e
 		return out, nil
 	}
 
-	entries, err := os.ReadDir(ctx.AuthDir)
-	if err != nil {
-		// Not an error if directory doesn't exist
-		return out, nil
-	}
-
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	errWalk := filepath.WalkDir(ctx.AuthDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
 		}
-		name := e.Name()
+		if d.IsDir() {
+			return nil
+		}
+		name := d.Name()
 		if !strings.HasSuffix(strings.ToLower(name), ".json") {
-			continue
+			return nil
 		}
-		full := filepath.Join(ctx.AuthDir, name)
-		data, errRead := os.ReadFile(full)
+		data, errRead := os.ReadFile(path)
 		if errRead != nil || len(data) == 0 {
-			continue
+			return nil
 		}
-		auths := synthesizeFileAuths(ctx, full, data)
+		auths := synthesizeFileAuths(ctx, path, data)
 		if len(auths) == 0 {
-			continue
+			return nil
 		}
 		out = append(out, auths...)
+		return nil
+	})
+	if errWalk != nil {
+		// Not an error if directory doesn't exist or walk fails
+		return out, nil
 	}
 	return out, nil
 }
@@ -89,6 +91,12 @@ func synthesizeFileAuthsWithMetadata(ctx *SynthesisContext, fullPath string, met
 	now := ctx.Now
 	cfg := ctx.Config
 	t, _ := metadata["type"].(string)
+	if strings.TrimSpace(t) == "" {
+		if provider, ok := metadata["provider"].(string); ok {
+			t = provider
+		}
+	}
+	t = strings.TrimSpace(t)
 	if t == "" {
 		return nil
 	}

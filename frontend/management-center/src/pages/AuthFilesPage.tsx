@@ -339,6 +339,10 @@ export function AuthFilesPage() {
     [filter, navigate]
   );
 
+  const openAuthTree = useCallback(() => {
+    navigate('/auth-files/tree', { state: { fromAuthFiles: true } });
+  }, [navigate]);
+
   useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -488,6 +492,9 @@ export function AuthFilesPage() {
           <div className={styles.headerActions}>
             <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
               {t('common.refresh')}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={openAuthTree} disabled={loading}>
+              {t('auth_files.tree_button', { defaultValue: 'File Tree' })}
             </Button>
             <Button
               size="sm"

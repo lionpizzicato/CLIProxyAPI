@@ -1,0 +1,150 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.pageContent {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 $spacing-lg $spacing-2xl;
+
+  @include mobile {
+    padding-left: $spacing-md;
+    padding-right: $spacing-md;
+  }
+}
+
+.infoCard {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.infoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+}
+
+.infoTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.infoMeta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rootPath {
+  font-family: $font-mono;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: $radius-md;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.searchInput {
+  min-width: 220px;
+  flex: 1 1 320px;
+}
+
+.treeCard {
+  padding: 0;
+  overflow: hidden;
+}
+
+.treeBody {
+  padding: $spacing-sm $spacing-lg $spacing-lg;
+
+  @include mobile {
+    padding-left: $spacing-md;
+    padding-right: $spacing-md;
+  }
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--text-primary);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.expandButton {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
+.expandPlaceholder {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+}
+
+.nodeIcon {
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nodeName {
+  font-weight: 600;
+  min-width: 120px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodePath {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.nodeMeta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.errorBox {
+  padding: $spacing-md $spacing-lg;
+  color: var(--error-color);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-error-light);
+}

@@ -37,3 +37,17 @@ export interface AuthFilesResponse {
   files: AuthFileItem[];
   total?: number;
 }
+
+export type AuthFileTreeNode = {
+  name: string;
+  path: string;
+  type: 'dir' | 'file' | string;
+  size?: number;
+  modtime?: string | number;
+  children?: AuthFileTreeNode[];
+};
+
+export type AuthFileTreeResponse = {
+  root: string;
+  tree?: AuthFileTreeNode | null;
+};
